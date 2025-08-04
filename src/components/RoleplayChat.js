@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { User, Send, Bot, Download, ArrowLeft, Users } from 'lucide-react';
 
 export const RoleplayChat = ({ persona, history, userInput, setUserInput, handleSubmit, isLoading, chatEndRef, onBack, onHome }) => {
