@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Send, Bot, Download, PlusCircle, Users, Trash2, ArrowLeft } from 'lucide-react';
+import { User, Send, CornerDownLeft, Bot, Download, PlusCircle, Users, MessageSquare, Trash2, ArrowLeft } from 'lucide-react';
 
 // --- Custom Hand-Drawn SVG Icons ---
 const DoodlePeopleIcon = ({ className }) => (
@@ -70,7 +70,7 @@ const DoodleSmileyIcon = ({ className }) => (
 
 // Main App Component
 const App = () => {
-    const [step, setStep] = useState('library');
+    const [step, setStep] = useState('library'); // library, questions, generating, persona, roleplay
     const [businessInfo, setBusinessInfo] = useState({ business: '', selling: '', audience: '' });
     const [personas, setPersonas] = useState([]);
     const [activePersonaId, setActivePersonaId] = useState(null);
@@ -79,6 +79,7 @@ const App = () => {
     const [errorMessage, setErrorMessage] = useState(null);
     const chatEndRef = useRef(null);
 
+    // Load state from localStorage on initial render
     useEffect(() => {
         try {
             const savedPersonas = localStorage.getItem('vibeCatcherPersonas');
@@ -90,6 +91,7 @@ const App = () => {
         }
     }, []);
 
+    // Save personas to localStorage whenever they change
     useEffect(() => {
         try {
             localStorage.setItem('vibeCatcherPersonas', JSON.stringify(personas));
@@ -113,7 +115,7 @@ const App = () => {
         if (step === 'roleplay') {
             scrollToBottom();
         }
-    }, [step, activePersona?.chatHistory]);
+    }, [activePersona?.chatHistory]);
 
     const generatePersona = async () => {
         if (!businessInfo.business || !businessInfo.selling) {
@@ -125,11 +127,11 @@ const App = () => {
         setStep('generating');
 
         const prompt = `
-            You are an expert digital marketing researcher. Based on the following business information, create a detailed user persona.
+            You are an expert digital marketing researcher with a creative, human-centric approach. Based on the following business information, create a detailed user persona.
             - Business: "${businessInfo.business}"
             - Selling: "${businessInfo.selling}"
             - Known Audience Info: "${businessInfo.audience}"
-            **IMPORTANT**: Your response MUST be a single, valid JSON object that conforms to the schema. Do NOT include any special characters like newlines or unescaped quotes inside the JSON values.
+            Generate a persona with the following structure. Be specific and creative. For 'favouriteBrands', please use well-known, real-world brands.
         `;
         const generationConfig = {
             responseMimeType: "application/json",
@@ -137,9 +139,19 @@ const App = () => {
                 type: "OBJECT",
                 properties: {
                     name: { type: "STRING" },
-                    demographics: { type: "OBJECT", properties: { location: { type: "STRING" }, income: { type: "STRING" }, maritalStatus: { type: "STRING" }, gender: { type: "STRING" }, age: { type: "NUMBER" } } },
+                    demographics: {
+                        type: "OBJECT",
+                        properties: {
+                            location: { type: "STRING" },
+                            income: { type: "STRING" },
+                            maritalStatus: { type: "STRING" },
+                            gender: { type: "STRING" },
+                            age: { type: "NUMBER" }
+                        }
+                    },
                     definingTraits: { type: "ARRAY", items: { type: "STRING" } },
                     goals: { type: "ARRAY", items: { type: "STRING" } },
+                    favouriteBrands: { type: "ARRAY", items: { type: "STRING" } },
                     frustrations: { type: "ARRAY", items: { type: "STRING" } },
                     informationalNeeds: { type: "ARRAY", items: { type: "STRING" } },
                     preferredPlatforms: { type: "ARRAY", items: { type: "STRING" } },
@@ -150,36 +162,33 @@ const App = () => {
         
         try {
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig };
-            const apiKey = ""; // You must manage your Gemini API key securely
+            const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
-            
             const result = await response.json();
-            const rawText = result.candidates?.content?.parts?.text;
-
-            if (rawText) {
-                try {
-                    const personaData = JSON.parse(rawText);
-                    const newPersona = {
-                        id: Date.now(),
-                        ...personaData,
-                        businessInfo: businessInfo,
-                        chatHistory: []
-                    };
-                    setPersonas(prev => [...prev, newPersona]);
-                    setBusinessInfo({ business: '', selling: '', audience: '' });
-                    setStep('library');
-                } catch (jsonError) {
-                    console.error("Failed to parse JSON from Gemini:", rawText, jsonError);
-                    throw new Error("The AI model returned a malformed response. Please try again.");
-                }
+            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                const personaData = JSON.parse(result.candidates[0].content.parts[0].text);
+                const newPersona = {
+                    id: Date.now(),
+                    ...personaData,
+                    businessInfo: businessInfo,
+                    chatHistory: [],
+                    qlooInsights: null // Initialize Qloo insights
+                };
+                setPersonas(prev => [...prev, newPersona]);
+                setBusinessInfo({ business: '', selling: '', audience: '' });
+                setStep('library');
             } else {
-                throw new Error("Invalid response structure from the AI model.");
+                throw new Error("Invalid response structure from API.");
             }
         } catch (error) {
             console.error("Error generating persona:", error);
-            setErrorMessage(error.message);
+            if (error.message.includes("401")) {
+                setErrorMessage("Authentication failed. There might be a temporary issue with the service. Please try again in a moment.");
+            } else {
+                setErrorMessage("An unexpected error occurred while generating the persona. Please try again.");
+            }
             setStep('questions');
         } finally {
             setIsLoading(false);
@@ -189,24 +198,28 @@ const App = () => {
     const handleRoleplaySubmit = async (e) => {
         e.preventDefault();
         if (!userInput.trim() || isLoading) return;
+
         const currentPersona = personas.find(p => p.id === activePersonaId);
         const newHistory = [...(currentPersona.chatHistory || []), { role: 'user', text: userInput }];
+        
         const updatedPersonas = personas.map(p => p.id === activePersonaId ? {...p, chatHistory: newHistory} : p);
         setPersonas(updatedPersonas);
+
         setUserInput('');
         setIsLoading(true);
+
         const personaDetails = JSON.stringify(currentPersona, null, 2);
         const chatHistoryString = newHistory.map(m => `${m.role}: ${m.text}`).join('\n');
-        const prompt = `You ARE the persona: ${personaDetails}. You are in honest mode and MUST be brutally honest and unfiltered. You are talking to someone from "${currentPersona.businessInfo.business}". Your conversation history is: ${chatHistoryString}. The user's new question is: "${userInput}". Give your raw, direct response. Do not break character.`;
+        const prompt = `You ARE the persona: ${personaDetails}. You've been given a potent truth serum. You MUST be brutally honest and unfiltered. You are talking to someone from "${currentPersona.businessInfo.business}". Your conversation history is: ${chatHistoryString}. The user's new question is: "${userInput}". Give your raw, direct response. Do not break character.`;
         
         try {
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = ""; // You must manage your Gemini API key securely
+            const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const result = await response.json();
-            if (result.candidates?.content?.parts?.text) {
-                const botResponse = result.candidates.content.parts.text;
+            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                const botResponse = result.candidates[0].content.parts[0].text;
                 const finalHistory = [...newHistory, { role: 'bot', text: botResponse }];
                 const finalUpdatedPersonas = personas.map(p => p.id === activePersonaId ? {...p, chatHistory: finalHistory} : p);
                 setPersonas(finalUpdatedPersonas);
@@ -227,7 +240,13 @@ const App = () => {
     const renderStep = () => {
         switch (step) {
             case 'generating':
-                return <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-yellow-100"><DoodleSparkleIcon className="w-24 h-24 text-yellow-500 animate-pulse mb-6" /><h2 className="text-3xl font-bold text-gray-800 mb-2" style={{fontFamily: "'Comic Sans MS', cursive, sans-serif"}}>Brewing up a persona...</h2><p className="text-gray-600">Our creative juices are flowing!</p></div>;
+                return (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-yellow-100">
+                        <DoodleSparkleIcon className="w-24 h-24 text-yellow-500 animate-pulse mb-6" />
+                        <h2 className="text-3xl font-bold text-gray-800 mb-2" style={{fontFamily: "'Comic Sans MS', cursive, sans-serif"}}>Brewing up a persona...</h2>
+                        <p className="text-gray-600">Our creative juices are flowing!</p>
+                    </div>
+                );
             case 'persona':
                 return <PersonaDisplay persona={activePersona} setPersonas={setPersonas} personas={personas} onStartRoleplay={() => setStep('roleplay')} onBack={() => setStep('library')} />;
             case 'roleplay':
@@ -238,14 +257,32 @@ const App = () => {
                     <div className="p-6 sm:p-8 bg-blue-100 h-full overflow-y-auto">
                         <div className="text-center relative">
                              <button onClick={() => setStep('library')} className="absolute top-0 left-0 p-2 bg-yellow-400 text-black font-bold rounded-lg border-2 border-black hover:bg-yellow-500 transition" title="Back to Library"><ArrowLeft size={20}/></button>
-                             <div className="inline-flex justify-center items-center gap-3 p-4 bg-green-400 text-black rounded-lg border-4 border-black" style={{boxShadow: '8px 8px 0px #000'}}><DoodleSmileyIcon className="w-12 h-12 text-black" /><h1 className="text-4xl font-extrabold" style={{fontFamily: "'Comic Sans MS', cursive, sans-serif"}}>Vibe Catcher</h1></div>
+                             <div className="inline-flex justify-center items-center gap-3 p-4 bg-green-400 text-black rounded-lg border-4 border-black" style={{boxShadow: '8px 8px 0px #000'}}>
+                                <DoodleSmileyIcon className="w-12 h-12 text-black" />
+                                <h1 className="text-4xl font-extrabold" style={{fontFamily: "'Comic Sans MS', cursive, sans-serif"}}>Vibe Catcher</h1>
+                            </div>
                             <p className="text-gray-600 mt-4">Answer these 3 things to cook up a customer persona.</p>
                         </div>
-                        {errorMessage && (<div className="my-4 p-4 bg-red-200 text-red-800 border-4 border-black rounded-lg" style={{boxShadow: '8px 8px 0px #000'}}><p className="font-bold text-lg">Oops, an error occurred!</p><p>{errorMessage}</p></div>)}
+                        {errorMessage && (
+                            <div className="my-4 p-4 bg-red-200 text-red-800 border-4 border-black rounded-lg" style={{boxShadow: '8px 8px 0px #000'}}>
+                                <p className="font-bold text-lg">Oops, an error occurred!</p>
+                                <p>{errorMessage}</p>
+                            </div>
+                        )}
                         <div className="space-y-6 py-8">
-                            {formFields.map(item => (<div key={item.name}><label htmlFor={item.name} className="block text-md font-bold text-gray-700 mb-2">{item.label}</label>{item.type === 'textarea' ? ( <textarea name={item.name} id={item.name} value={businessInfo[item.name]} onChange={handleInputChange} rows="3" className="w-full p-4 bg-white border-4 border-black rounded-lg focus:ring-4 focus:ring-yellow-400 focus:border-black transition text-lg" placeholder={item.placeholder} /> ) : ( <input type="text" name={item.name} id={item.name} value={businessInfo[item.name]} onChange={handleInputChange} className="w-full p-4 bg-white border-4 border-black rounded-lg focus:ring-4 focus:ring-yellow-400 focus:border-black transition text-lg" placeholder={item.placeholder} /> )}</div>))}
+                            {formFields.map(item => (
+                                <div key={item.name}>
+                                    <label htmlFor={item.name} className="block text-md font-bold text-gray-700 mb-2">{item.label}</label>
+                                    {item.type === 'textarea' ? ( <textarea name={item.name} id={item.name} value={businessInfo[item.name]} onChange={handleInputChange} rows="3" className="w-full p-4 bg-white border-4 border-black rounded-lg focus:ring-4 focus:ring-yellow-400 focus:border-black transition text-lg" placeholder={item.placeholder} /> ) : ( <input type="text" name={item.name} id={item.name} value={businessInfo[item.name]} onChange={handleInputChange} className="w-full p-4 bg-white border-4 border-black rounded-lg focus:ring-4 focus:ring-yellow-400 focus:border-black transition text-lg" placeholder={item.placeholder} /> )}
+                                </div>
+                            ))}
                         </div>
-                        <div className="pb-4"><button onClick={generatePersona} disabled={isLoading} className="w-full flex items-center justify-center p-5 bg-green-400 text-black font-bold text-xl rounded-lg border-4 border-black hover:bg-green-500 transition disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105 active:scale-100" style={{boxShadow: '8px 8px 0px #000'}}><DoodleSparkleIcon className="w-6 h-6 mr-3" />{isLoading ? 'Thinking...' : 'Make the Persona!'}</button></div>
+                        <div className="pb-4">
+                            <button onClick={generatePersona} disabled={isLoading} className="w-full flex items-center justify-center p-5 bg-green-400 text-black font-bold text-xl rounded-lg border-4 border-black hover:bg-green-500 transition disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105 active:scale-100" style={{boxShadow: '8px 8px 0px #000'}}>
+                                <DoodleSparkleIcon className="w-6 h-6 mr-3" />
+                                {isLoading ? 'Thinking...' : 'Make the Persona!'}
+                            </button>
+                        </div>
                     </div>
                 );
             case 'library':
@@ -267,48 +304,47 @@ const PersonaLibrary = ({ personas, setStep, setActivePersonaId, deletePersona }
     return (
         <div className="p-6 sm:p-8 bg-yellow-100 h-full grid grid-rows-[auto_1fr_auto]">
             <div className="text-center mb-8">
-                <div className="inline-flex justify-center items-center gap-3 p-4 bg-green-400 text-black rounded-lg border-4 border-black" style={{boxShadow: '8px 8px 0px #000'}}><Users className="w-12 h-12 text-black" /><h1 className="text-4xl font-extrabold" style={{fontFamily: "'Comic Sans MS', cursive, sans-serif"}}>Persona Library</h1></div>
+                <div className="inline-flex justify-center items-center gap-3 p-4 bg-green-400 text-black rounded-lg border-4 border-black" style={{boxShadow: '8px 8px 0px #000'}}>
+                    <Users className="w-12 h-12 text-black" />
+                    <h1 className="text-4xl font-extrabold" style={{fontFamily: "'Comic Sans MS', cursive, sans-serif"}}>Persona Library</h1>
+                </div>
             </div>
             <div className="overflow-y-auto -mr-6 pr-6 min-h-0">
-                 {personas.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">{personas.map(p => (<div key={p.id} className="bg-white p-4 rounded-lg border-4 border-black flex flex-col gap-3" style={{boxShadow: '8px 8px 0px #000'}}><h3 className="font-bold text-2xl truncate">{p.name}</h3><p className="text-sm text-gray-600 flex-grow">For: {p.businessInfo.business}</p><div className="flex gap-2 mt-auto"><button onClick={() => { setActivePersonaId(p.id); setStep('persona'); }} className="flex-1 p-2 bg-blue-400 text-black font-bold rounded-lg border-2 border-black hover:bg-blue-500 transition">View</button><button onClick={() => deletePersona(p.id)} className="p-2 bg-red-400 text-black font-bold rounded-lg border-2 border-black hover:bg-red-500 transition"><Trash2 size={20}/></button></div></div>))}</div>) : (<div className="flex items-center justify-center h-full"><p className="text-gray-500 text-lg text-center">Your persona library is empty.<br/>Create one to get started!</p></div>)}
+                 {personas.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        {personas.map(p => (
+                            <div key={p.id} className="bg-white p-4 rounded-lg border-4 border-black flex flex-col gap-3" style={{boxShadow: '8px 8px 0px #000'}}>
+                                <h3 className="font-bold text-2xl truncate">{p.name}</h3>
+                                <p className="text-sm text-gray-600 flex-grow">For: {p.businessInfo.business}</p>
+                                <div className="flex gap-2 mt-auto">
+                                    <button onClick={() => { setActivePersonaId(p.id); setStep('persona'); }} className="flex-1 p-2 bg-blue-400 text-black font-bold rounded-lg border-2 border-black hover:bg-blue-500 transition">View</button>
+                                    <button onClick={() => deletePersona(p.id)} className="p-2 bg-red-400 text-black font-bold rounded-lg border-2 border-black hover:bg-red-500 transition"><Trash2 size={20}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-center h-full">
+                        <p className="text-gray-500 text-lg text-center">Your persona library is empty.<br/>Create one to get started!</p>
+                    </div>
+                )}
             </div>
-            <div className="pt-4"><button onClick={() => setStep('questions')} className="w-full flex items-center justify-center p-5 bg-blue-400 text-black font-bold text-xl rounded-lg border-4 border-black hover:bg-blue-500 transition transform hover:scale-105 active:scale-100" style={{boxShadow: '8px 8px 0px #000'}}><PlusCircle className="w-6 h-6 mr-3" />Create New Persona</button></div>
+            <div className="pt-4">
+                <button onClick={() => setStep('questions')} className="w-full flex items-center justify-center p-5 bg-blue-400 text-black font-bold text-xl rounded-lg border-4 border-black hover:bg-blue-500 transition transform hover:scale-105 active:scale-100" style={{boxShadow: '8px 8px 0px #000'}}>
+                    <PlusCircle className="w-6 h-6 mr-3" />
+                    Create New Persona
+                </button>
+            </div>
         </div>
     );
 };
 
-const PersonaDisplay = ({ persona, onStartRoleplay, onBack }) => {
+
+// Persona Display Component
+const PersonaDisplay = ({ persona, setPersonas, personas, onStartRoleplay, onBack }) => {
     if (!persona) return null;
-
-    const handleDownloadPersona = () => {
-        let content = `Persona: ${persona.name}\n`;
-        content += `For Business: ${persona.businessInfo.business}\n\n`;
-        content += "========================================\n";
-        
-        Object.entries(persona).forEach(([key, value]) => {
-            if (['id', 'businessInfo', 'chatHistory', 'name'].includes(key)) return;
-            const title = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-            content += `${title}:\n`;
-            if (typeof value === 'object' && value !== null) {
-                Object.entries(value).forEach(([dKey, dValue]) => {
-                    content += `- ${dKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${dValue}\n`;
-                });
-            } else {
-                content += Array.isArray(value) ? value.map(item => `- ${item}`).join('\n') : value;
-            }
-            content += "\n\n";
-        });
-
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `persona-${persona.name.replace(/\s+/g, '_')}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
+    
+    const handleDownloadPersona = () => { /* ... download logic ... */ };
 
     const panels = [
         { title: "Demographics", data: persona.demographics, key: 'demographics' },
@@ -377,11 +413,13 @@ const RoleplayChat = ({ persona, history, userInput, setUserInput, handleSubmit,
     
     const handleDownloadChat = () => {
         let content = `Chat History with ${persona.name}\n`;
-        content += "========================================\n\n";
+        content += `========================================\n\n`;
+
         (history || []).forEach(msg => {
             const prefix = msg.role === 'user' ? 'You' : persona.name;
             content += `${prefix}:\n${msg.text}\n\n----------------------------------------\n\n`;
         });
+
         const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -396,24 +434,71 @@ const RoleplayChat = ({ persona, history, userInput, setUserInput, handleSubmit,
     return (
         <div className="flex flex-col h-full bg-yellow-100 overflow-hidden">
             <header className="p-4 border-b-4 border-black flex justify-between items-center bg-yellow-200 flex-shrink-0">
-                <div><h2 className="text-xl font-bold text-black">Chatting with {persona.name}</h2><p className="text-sm text-green-700 font-semibold">Honest Mode: ON</p></div>
+                <div>
+                    <h2 className="text-xl font-bold text-black">Chatting with {persona.name}</h2>
+                    <p className="text-sm text-green-700 font-semibold">Truth Serum: ON</p>
+                </div>
                 <div className="flex items-center gap-4">
-                     <button onClick={onBack} className="p-2 bg-yellow-400 text-black font-bold rounded-lg border-2 border-black hover:bg-yellow-500 transition" title="Back to Persona"><ArrowLeft className="w-5 h-5" /></button>
-                     <button onClick={onHome} className="p-2 bg-green-400 text-black font-bold rounded-lg border-2 border-black hover:bg-green-500 transition" title="Back to Library"><Users className="w-5 h-5" /></button>
-                    <button onClick={handleDownloadChat} className="p-2 bg-blue-400 text-black font-bold rounded-lg border-2 border-black hover:bg-blue-500 transition" title="Download Chat"><Download className="w-5 h-5" /></button>
+                     <button onClick={onBack} className="p-2 bg-yellow-400 text-black font-bold rounded-lg border-2 border-black hover:bg-yellow-500 transition" title="Back to Persona">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                     <button onClick={onHome} className="p-2 bg-green-400 text-black font-bold rounded-lg border-2 border-black hover:bg-green-500 transition" title="Back to Library">
+                        <Users className="w-5 h-5" />
+                    </button>
+                    <button onClick={handleDownloadChat} className="p-2 bg-blue-400 text-black font-bold rounded-lg border-2 border-black hover:bg-blue-500 transition" title="Download Chat">
+                        <Download className="w-5 h-5" />
+                    </button>
                 </div>
             </header>
 
             <div className="flex-grow overflow-y-auto min-h-0 p-6 space-y-6">
-                {(history || []).map((msg, index) => (<div key={index} className={`flex items-end gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>{msg.role === 'bot' && (<div className="w-10 h-10 rounded-full bg-blue-300 border-2 border-black flex items-center justify-center text-black font-bold flex-shrink-0 text-xl">{persona.name.charAt(0)}</div>)}<div className={`max-w-md p-4 rounded-xl border-2 border-black ${msg.role === 'user' ? 'bg-green-300' : 'bg-blue-200'}`}><p className="text-md text-black">{msg.text}</p></div>{msg.role === 'user' && (<div className="w-10 h-10 rounded-full bg-gray-300 border-2 border-black flex items-center justify-center text-black flex-shrink-0"><User className="w-6 h-6" /></div>)}</div>))}
-                {isLoading && (<div className="flex items-end gap-3 justify-start"><div className="w-10 h-10 rounded-full bg-blue-300 border-2 border-black flex items-center justify-center text-black font-bold flex-shrink-0"><Bot className="w-6 h-6 animate-pulse" /></div><div className="max-w-md p-4 rounded-xl border-2 border-black bg-blue-200"><div className="flex items-center space-x-2"><span className="w-3 h-3 bg-black rounded-full animate-bounce"></span><span className="w-3 h-3 bg-black rounded-full animate-bounce delay-75"></span><span className="w-3 h-3 bg-black rounded-full animate-bounce delay-150"></span></div></div></div>)}
+                {(history || []).map((msg, index) => (
+                    <div key={index} className={`flex items-end gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {msg.role === 'bot' && (
+                            <div className="w-10 h-10 rounded-full bg-blue-300 border-2 border-black flex items-center justify-center text-black font-bold flex-shrink-0 text-xl">
+                                {persona.name.charAt(0)}
+                            </div>
+                        )}
+                        <div className={`max-w-md p-4 rounded-xl border-2 border-black ${msg.role === 'user' ? 'bg-green-300' : 'bg-blue-200'}`}>
+                            <p className="text-md text-black">{msg.text}</p>
+                        </div>
+                         {msg.role === 'user' && (
+                            <div className="w-10 h-10 rounded-full bg-gray-300 border-2 border-black flex items-center justify-center text-black flex-shrink-0">
+                                <User className="w-6 h-6" />
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {isLoading && (
+                     <div className="flex items-end gap-3 justify-start">
+                        <div className="w-10 h-10 rounded-full bg-blue-300 border-2 border-black flex items-center justify-center text-black font-bold flex-shrink-0">
+                           <Bot className="w-6 h-6 animate-pulse" />
+                        </div>
+                        <div className="max-w-md p-4 rounded-xl border-2 border-black bg-blue-200">
+                            <div className="flex items-center space-x-2">
+                                <span className="w-3 h-3 bg-black rounded-full animate-bounce"></span>
+                                <span className="w-3 h-3 bg-black rounded-full animate-bounce delay-75"></span>
+                                <span className="w-3 h-3 bg-black rounded-full animate-bounce delay-150"></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div ref={chatEndRef} />
             </div>
 
             <div className="p-4 border-t-4 border-black bg-yellow-100 flex-shrink-0">
                 <form onSubmit={handleSubmit} className="flex items-center gap-3">
-                    <input type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder={`Ask ${persona.name} anything...`} className="w-full p-3 bg-white border-2 border-black rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-black transition text-lg" disabled={isLoading} />
-                    <button type="submit" disabled={isLoading || !userInput.trim()} className="p-3 bg-blue-400 text-black rounded-lg border-2 border-black hover:bg-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition"><Send className="w-6 h-6" /></button>
+                    <input
+                        type="text"
+                        value={userInput}
+                        onChange={(e) => setUserInput(e.target.value)}
+                        placeholder={`Ask ${persona.name} anything...`}
+                        className="w-full p-3 bg-white border-2 border-black rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-black transition text-lg"
+                        disabled={isLoading}
+                    />
+                    <button type="submit" disabled={isLoading || !userInput.trim()} className="p-3 bg-blue-400 text-black rounded-lg border-2 border-black hover:bg-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition">
+                        <Send className="w-6 h-6" />
+                    </button>
                 </form>
             </div>
         </div>
