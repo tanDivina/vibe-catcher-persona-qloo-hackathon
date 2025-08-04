@@ -279,11 +279,12 @@ const PersonaLibrary = ({ personas, setStep, setActivePersonaId, deletePersona }
 };
 
 const PersonaDisplay = ({ persona, setPersonas, personas, onStartRoleplay, onBack }) => {
-    if (!persona) return null;
     const [isEnriching, setIsEnriching] = useState(false);
     const [enrichmentMessage, setEnrichmentMessage] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editableBrands, setEditableBrands] = useState(persona.favouriteBrands || []);
+    const [editableBrands, setEditableBrands] = useState(persona?.favouriteBrands || []);
+    
+    if (!persona) return null;
 
     const handleDownloadPersona = () => {
         let content = `Persona: ${persona.name}\n`;
