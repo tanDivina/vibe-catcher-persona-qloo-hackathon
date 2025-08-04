@@ -198,7 +198,7 @@ const App = () => {
         setIsLoading(true);
         const personaDetails = JSON.stringify(currentPersona, null, 2);
         const chatHistoryString = newHistory.map(m => `${m.role}: ${m.text}`).join('\n');
-        const prompt = `You ARE the persona: ${personaDetails}. You've been given a potent truth serum. You MUST be brutally honest and unfiltered. You are talking to someone from "${currentPersona.businessInfo.business}". Your conversation history is: ${chatHistoryString}. The user's new question is: "${userInput}". Give your raw, direct response. Do not break character.`;
+        const prompt = `You ARE the persona: ${personaDetails}. You are in honest mode and MUST be brutally honest and unfiltered. You are talking to someone from "${currentPersona.businessInfo.business}". Your conversation history is: ${chatHistoryString}. The user's new question is: "${userInput}". Give your raw, direct response. Do not break character.`;
         
         try {
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
@@ -401,7 +401,7 @@ const RoleplayChat = ({ persona, history, userInput, setUserInput, handleSubmit,
     return (
         <div className="flex flex-col h-full bg-yellow-100 overflow-hidden">
             <header className="p-4 border-b-4 border-black flex justify-between items-center bg-yellow-200 flex-shrink-0">
-                <div><h2 className="text-xl font-bold text-black">Chatting with {persona.name}</h2><p className="text-sm text-green-700 font-semibold">Truth Serum: ON</p></div>
+                <div><h2 className="text-xl font-bold text-black">Chatting with {persona.name}</h2><p className="text-sm text-green-700 font-semibold">Honest Mode: ON</p></div>
                 <div className="flex items-center gap-4">
                      <button onClick={onBack} className="p-2 bg-yellow-400 text-black font-bold rounded-lg border-2 border-black hover:bg-yellow-500 transition" title="Back to Persona"><ArrowLeft className="w-5 h-5" /></button>
                      <button onClick={onHome} className="p-2 bg-green-400 text-black font-bold rounded-lg border-2 border-black hover:bg-green-500 transition" title="Back to Library"><Users className="w-5 h-5" /></button>

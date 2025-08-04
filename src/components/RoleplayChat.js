@@ -28,7 +28,7 @@ export const RoleplayChat = ({ persona, history, userInput, setUserInput, handle
             <header className="p-4 border-b-4 border-black flex justify-between items-center bg-yellow-200 flex-shrink-0">
                 <div>
                     <h2 className="text-xl font-bold text-black">Chatting with {persona.name}</h2>
-                    <p className="text-sm text-green-700 font-semibold">Truth Serum: ON</p>
+                    <p className="text-sm text-green-700 font-semibold">Honest Mode: ON</p>
                 </div>
                 <div className="flex items-center gap-4">
                      <button onClick={onBack} className="p-2 bg-yellow-400 text-black font-bold rounded-lg border-2 border-black hover:bg-yellow-500 transition" title="Back to Persona">
