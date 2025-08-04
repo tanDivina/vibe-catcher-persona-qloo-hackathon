@@ -206,7 +206,7 @@ const App = () => {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const result = await response.json();
-            if (result.candidates?.?.content?.parts?.?.text) {
+            if (result.candidates?.content?.parts?.text) {
                 const botResponse = result.candidates.content.parts.text;
                 const finalHistory = [...newHistory, { role: 'bot', text: botResponse }];
                 const finalUpdatedPersonas = personas.map(p => p.id === activePersonaId ? {...p, chatHistory: finalHistory} : p);
