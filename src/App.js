@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Send, CornerDownLeft, Bot, Download, PlusCircle, Users, MessageSquare, Trash2, ArrowLeft, Zap, X } from 'lucide-react';
-import axios from 'axios';
+import { User, Send, Bot, Download, PlusCircle, Users, Trash2, ArrowLeft } from 'lucide-react';
 
 // --- Custom Hand-Drawn SVG Icons ---
 const DoodlePeopleIcon = ({ className }) => (
@@ -114,7 +113,7 @@ const App = () => {
         if (step === 'roleplay') {
             scrollToBottom();
         }
-    }, [activePersona?.chatHistory]);
+    }, [step, activePersona?.chatHistory]);
 
     const generatePersona = async () => {
         if (!businessInfo.business || !businessInfo.selling) {
@@ -278,12 +277,7 @@ const PersonaLibrary = ({ personas, setStep, setActivePersonaId, deletePersona }
     );
 };
 
-const PersonaDisplay = ({ persona, setPersonas, personas, onStartRoleplay, onBack }) => {
-    const [isEnriching, setIsEnriching] = useState(false);
-    const [enrichmentMessage, setEnrichmentMessage] = useState(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editableBrands, setEditableBrands] = useState(persona?.favouriteBrands || []);
-    
+const PersonaDisplay = ({ persona, onStartRoleplay, onBack }) => {
     if (!persona) return null;
 
     const handleDownloadPersona = () => {
