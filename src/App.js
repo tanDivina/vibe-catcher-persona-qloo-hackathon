@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Send, CornerDownLeft, Bot, Download, PlusCircle, Users, MessageSquare, Trash2, ArrowLeft } from 'lucide-react';
+import { User, Send, Bot, Download, PlusCircle, Users, Trash2, ArrowLeft } from 'lucide-react';
 
 // --- Custom Hand-Drawn SVG Icons ---
 const DoodlePeopleIcon = ({ className }) => (
@@ -115,7 +115,7 @@ const App = () => {
         if (step === 'roleplay') {
             scrollToBottom();
         }
-    }, [activePersona?.chatHistory]);
+    }, [step, activePersona?.chatHistory]);
 
     const generatePersona = async () => {
         if (!businessInfo.business || !businessInfo.selling) {
