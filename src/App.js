@@ -157,7 +157,7 @@ const App = () => {
             if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
             
             const result = await response.json();
-            const rawText = result.candidates?.?.content?.parts?.?.text;
+            const rawText = result.candidates?.content?.parts?.text;
 
             if (rawText) {
                 try {
